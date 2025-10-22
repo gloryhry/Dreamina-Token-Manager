@@ -1,0 +1,15 @@
+{
+  "watch": [
+    "src"
+  ],
+  "ignore": [
+    "data/**",
+    "logs/**",
+    "public/**",
+    "docs/**",
+    ".spec-workflow/**"
+  ],
+  "ext": "js,json",
+  "delay": "200ms"
+}
+

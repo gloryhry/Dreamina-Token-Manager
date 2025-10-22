@@ -163,7 +163,9 @@ class DataPersistence {
       email,
       password: accountData.password,
       token: accountData.token,
-      expires: accountData.expires
+      expires: accountData.expires,
+      sessionid: accountData.sessionid,
+      sessionid_expires: accountData.sessionid_expires
     }
 
     if (existingIndex !== -1) {
@@ -203,7 +205,9 @@ class DataPersistence {
       email: account.email,
       password: account.password,
       token: account.token,
-      expires: account.expires
+      expires: account.expires,
+      sessionid: account.sessionid,
+      sessionid_expires: account.sessionid_expires
     }))
 
     await fs.writeFile(this.dataFilePath, JSON.stringify(data, null, 2), 'utf-8')

@@ -3,19 +3,14 @@ import axios from 'axios'
 
 const routes = [
   {
-    name: 'dashboard',
+    name: 'dreamina',
     path: '/',
-    component: () => import('../views/dashboard.vue')
+    component: () => import('../views/dreamina-dashboard.vue')
   },
   {
     name: 'auth',
     path: '/auth',
     component: () => import('../views/auth.vue')
-  },
-  {
-    name: 'settings',
-    path: '/settings',
-    component: () => import('../views/settings.vue')
   }
 ]
 
@@ -48,7 +43,7 @@ router.beforeEach(async (to, from, next) => {
           localStorage.setItem('isAdmin', isAdmin.toString())
 
           // 检查是否需要管理员权限
-          if ((to.path === '/' || to.path === '/settings') && !isAdmin) {
+          if (to.path === '/' && !isAdmin) {
             alert('您没有访问管理页面的权限')
             next({ path: '/auth' })
             return

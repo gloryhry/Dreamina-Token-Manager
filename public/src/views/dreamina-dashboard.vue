@@ -2,7 +2,7 @@
   <div class="w-100vw h-100vh p-4 overflow-y-auto">
     <div class="container mx-auto">
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 px-4 space-y-4 md:space-y-0 pt-5">
-        <h1 class="text-4xl font-bold">Token Manager <span class="text-gray-500 text-sm">by 兜豆子</span></h1>
+        <h1 class="text-4xl font-bold">Dreamina Token Manager <span class="text-gray-500 text-sm"></span></h1>
         <div class="flex flex-col sm:flex-row w-full md:w-auto space-y-3 sm:space-y-0 sm:space-x-2 lg:space-x-4">
           <button @click="showAddModal = true"
                   class="action-button font-bold border border-green-200 bg-green-50 text-green-900 px-4 py-2 rounded-xl shadow-sm hover:bg-green-100 hover:border-green-400 transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0">
@@ -46,10 +46,6 @@
                   class="action-button font-bold border border-yellow-200 bg-yellow-50 text-yellow-900 px-4 py-2 rounded-xl shadow-sm hover:bg-yellow-100 hover:border-yellow-400 transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0">
             导出账号
           </button>
-          <router-link to="/settings"
-                       class="action-button font-bold border border-blue-200 bg-blue-50 text-blue-900 px-4 py-2 rounded-xl shadow-sm hover:bg-blue-100 hover:border-blue-400 transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0 text-center">
-            系统设置
-          </router-link>
         </div>
       </div>
 
@@ -172,17 +168,17 @@
                 </div>
                 <div class="relative flex items-center bg-blue-50/80 rounded-lg px-2 py-1">
                   <div class="overflow-x-auto scrollbar-hide flex-1 flex items-center space-x-2">
-                    <span class="text-gray-700 min-w-[96px] text-left font-semibold">🔐 Token:</span>
-                    <span class="font-medium whitespace-nowrap text-left text-sm">{{ token.token }}</span>
+                    <span class="text-gray-700 min-w-[96px] text-left font-semibold">🔐 SessionID:</span>
+                    <span class="font-medium whitespace-nowrap text-left text-sm">{{ token.sessionid }}</span>
                   </div>
-                  <button @click="copyToClipboard(token.token)" class="absolute right-2 opacity-0 hover:opacity-100 transition-opacity bg-blue-200 hover:bg-blue-300 rounded px-2 py-1 text-base">📋</button>
+                  <button @click="copyToClipboard(token.sessionid)" class="absolute right-2 opacity-0 hover:opacity-100 transition-opacity bg-blue-200 hover:bg-blue-300 rounded px-2 py-1 text-base">📋</button>
                 </div>
                 <div class="relative flex items-center bg-blue-50/80 rounded-lg px-2 py-1">
                   <div class="overflow-x-auto scrollbar-hide flex-1 flex items-center space-x-2">
                     <span class="text-gray-700 min-w-[96px] text-left font-semibold">⏰ Expire:</span>
-                    <span class="font-medium whitespace-nowrap text-left">{{ new Date(token.expires * 1000).toLocaleString() }}</span>
+                    <span class="font-medium whitespace-nowrap text-left">{{ new Date(token.sessionid_expires * 1000).toLocaleString() }}</span>
                   </div>
-                  <button @click="copyToClipboard(new Date(token.expires * 1000).toLocaleString())" class="absolute right-2 opacity-0 hover:opacity-100 transition-opacity bg-blue-200 hover:bg-blue-300 rounded px-2 py-1 text-base">📋</button>
+                  <button @click="copyToClipboard(new Date(token.sessionid_expires * 1000).toLocaleString())" class="absolute right-2 opacity-0 hover:opacity-100 transition-opacity bg-blue-200 hover:bg-blue-300 rounded px-2 py-1 text-base">📋</button>
                 </div>
               </div>
               
@@ -296,7 +292,7 @@
     <!-- Toast 通知 -->
     <div v-if="toast.show"
          :class="[
-           'fixed top-4 right-4 z-50 px-6 py-4 rounded-xl shadow-lg transform transition-all duration-300',
+           'fixed bottom-4 right-4 z-50 px-6 py-4 rounded-xl shadow-lg transform transition-all duration-300',
            toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
          ]">
       <div class="flex items-center space-x-2">
@@ -313,7 +309,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import axios from 'axios'
 
 const tokens = ref([])
@@ -348,6 +344,7 @@ const toast = ref({
   message: '',
   type: 'success'
 })
+let eventSource = null
 
 const isSelected = (email) => {
   return selectedTokens.value.includes(email)
@@ -382,7 +379,7 @@ const deleteSelected = async () => {
   try {
     // 批量删除，这里假设后端支持批量删除，如果不支持，需要循环调用单个删除
     const deletePromises = selectedTokens.value.map(email => 
-      axios.delete('/api/deleteAccount', {
+      axios.delete('/api/dreamina/deleteAccount', {
         data: { email },
         headers: {
           'Authorization': localStorage.getItem('apiKey') || ''
@@ -404,7 +401,7 @@ const deleteSelected = async () => {
 const deleteAllAccounts = async () => {
   try {
     const deletePromises = allTokens.value.map(token => 
-      axios.delete('/api/deleteAccount', {
+      axios.delete('/api/dreamina/deleteAccount', {
         data: { email: token.email },
         headers: {
           'Authorization': localStorage.getItem('apiKey') || ''
@@ -470,7 +467,7 @@ const copyToClipboard = async (text) => {
 const getTokens = async () => {
   try {
     // 始终获取完整的账号列表以确保数据同步
-    const fullRes = await axios.get('/api/getAllAccounts', {
+    const fullRes = await axios.get('/api/dreamina/getAllAccounts', {
       params: {
         page: 1,
         pageSize: 1000
@@ -499,15 +496,14 @@ const getTokens = async () => {
 
 const addToken = async () => {
   try {
-    await axios.post('/api/setAccount', newAccount.value, {
+    await axios.post('/api/dreamina/setAccount', newAccount.value, {
       headers: {
         'Authorization': localStorage.getItem('apiKey') || ''
       }
     })
     showAddModal.value = false
     newAccount.value = { email: '', password: '' }
-    await getTokens()
-    showToast('添加账号成功')
+    showToast('添加任务已提交')
   } catch (error) {
     console.error('添加账号失败:', error)
     showToast('添加账号失败: ' + error.message, 'error')
@@ -516,7 +512,7 @@ const addToken = async () => {
 
 const addBatchTokens = async () => {
   try {
-    await axios.post('/api/setAccounts', { accounts: batchAccounts.value }, {
+    await axios.post('/api/dreamina/setAccounts', { accounts: batchAccounts.value }, {
       headers: {
         'Authorization': localStorage.getItem('apiKey') || ''
       }
@@ -537,7 +533,7 @@ const refreshToken = async (email) => {
   refreshingTokens.value.push(email)
 
   try {
-    await axios.post('/api/refreshAccount', { email }, {
+    await axios.post('/api/dreamina/refreshAccount', { email }, {
       headers: {
         'Authorization': localStorage.getItem('apiKey') || ''
       }
@@ -566,7 +562,7 @@ const refreshAllAccounts = async () => {
   isRefreshingAll.value = true
 
   try {
-    const response = await axios.post('/api/refreshAllAccounts', {
+    const response = await axios.post('/api/dreamina/refreshAllAccounts', {
       thresholdHours: 24
     }, {
       headers: {
@@ -593,7 +589,7 @@ const forceRefreshAllAccounts = async () => {
   isForceRefreshingAll.value = true
 
   try {
-    const response = await axios.post('/api/forceRefreshAllAccounts', {}, {
+    const response = await axios.post('/api/dreamina/forceRefreshAllAccounts', {}, {
       headers: {
         'Authorization': localStorage.getItem('apiKey') || ''
       }
@@ -644,7 +640,7 @@ const exportAccounts = () => {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = 'qwen_accounts.txt'
+  link.download = 'dreamina_accounts.txt'
   document.body.appendChild(link)
   link.click()
   
@@ -659,6 +655,37 @@ const exportAccounts = () => {
 
 onMounted(() => {
   getTokens()
+  try {
+    const key = localStorage.getItem('apiKey') || ''
+    if (key) {
+      eventSource = new EventSource(`/api/events?apiKey=${encodeURIComponent(key)}`)
+      eventSource.addEventListener('account:add:done', (e) => {
+        try {
+          const data = JSON.parse(e.data)
+          showToast(`账号 ${data.email} ${data.success ? '添加成功' : '添加失败'}`, data.success ? 'success' : 'error')
+          getTokens()
+        } catch (_) {}
+      })
+      eventSource.addEventListener('account:batchAdd:done', (e) => {
+        try {
+          const data = JSON.parse(e.data)
+          const failCount = (data.total || 0) - (data.successCount || 0)
+          const msg = `批量添加完成：成功 ${data.successCount}/${data.total}`
+          showToast(msg, failCount > 0 ? 'error' : 'success')
+          getTokens()
+        } catch (_) {}
+      })
+    }
+  } catch (err) {
+    console.error('SSE 连接失败:', err)
+  }
+})
+
+onUnmounted(() => {
+  if (eventSource) {
+    eventSource.close()
+    eventSource = null
+  }
 })
 </script>
 
