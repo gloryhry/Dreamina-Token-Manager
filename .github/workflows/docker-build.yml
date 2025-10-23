@@ -1,23 +1,53 @@
-name: Build Multi-Architecture Docker Image
+name: Docker Build
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, master, develop ]
     tags: [ 'v*' ]
     paths:
-      - 'package.json'  
-  pull_request:
-    branches: [ main ]
-    paths:
+      - 'Dockerfile'
       - 'package.json'
+      - 'public/package.json'
+      - 'src/**'
+      - 'public/**'
+      - 'docker-compose*.yml'
+      - '.github/workflows/docker-build.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'Dockerfile'
+      - 'package.json'
+      - 'public/package.json'
+      - 'src/**'
+      - 'public/**'
+      - '.github/workflows/docker-build.yml'
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'Target platforms (comma separated)'
+        required: false
+        default: 'linux/amd64'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+    env:
+      PLATFORMS: ${{ github.event_name == 'workflow_dispatch' && inputs.platforms || 'linux/amd64' }}
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
     
     - name: Record build start time
       id: start-time
@@ -50,57 +80,56 @@ jobs:
           echo "⚠️ No package.json found, using repository name: ${REPO_NAME}"
         fi
     
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-      with:
-        platforms: linux/amd64,linux/arm64
-    
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
-      with:
-        platforms: arm64
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
     
-    - name: Login to Docker Hub
-      if: github.event_name != 'pull_request'
+    - name: Login to GitHub Container Registry
+      if: ${{ github.event_name != 'pull_request' }}
       uses: docker/login-action@v3
       with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     
     # 🏷️ 使用package.json的name构建镜像名
     - name: Generate Docker tags
       id: tags
       run: |
-        # 使用package.json的name（清理后）作为镜像名
-        DOCKERHUB_REPO="${{ secrets.DOCKERHUB_USERNAME }}/${{ steps.package-info.outputs.clean_name }}"
-        
+        # 使用 GitHub Container Registry 作为目标仓库
+        OWNER="${{ github.repository_owner }}"
+        OWNER_LC=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+        GHCR_REPO="ghcr.io/${OWNER_LC}/${{ steps.package-info.outputs.clean_name }}"
+
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           # PR: 只生成PR标签用于测试
-          TAGS="${DOCKERHUB_REPO}:pr-${{ github.event.number }}"
+          TAGS="${GHCR_REPO}:pr-${{ github.event.number }}"
         else
           # 总是包含latest标签
-          TAGS="${DOCKERHUB_REPO}:latest"
-          
+          TAGS="${GHCR_REPO}:latest"
+
           # 如果有package.json，添加v前缀版本标签
           if [ "${{ steps.package-info.outputs.has_package_json }}" = "true" ]; then
             PACKAGE_VERSION="${{ steps.package-info.outputs.version }}"
-            TAGS="${TAGS},${DOCKERHUB_REPO}:v${PACKAGE_VERSION}"
+            TAGS="${TAGS},${GHCR_REPO}:v${PACKAGE_VERSION}"
             echo "📦 Adding version tag: v${PACKAGE_VERSION}"
           fi
         fi
-        
-        echo "repository=${DOCKERHUB_REPO}" >> $GITHUB_OUTPUT
+
+        echo "repository=${GHCR_REPO}" >> $GITHUB_OUTPUT
         echo "tags=${TAGS}" >> $GITHUB_OUTPUT
-        echo "🏷️ Docker repository: ${DOCKERHUB_REPO}"
+        echo "🏷️ Container repository: ${GHCR_REPO}"
         echo "🏷️ Generated tags: ${TAGS}"
     
     # 🏗️ 构建和推送
-    - name: Build and push multi-architecture image
+    - name: Build and push image
       uses: docker/build-push-action@v5
       with:
         context: .
         file: ./Dockerfile
-        platforms: linux/amd64,linux/arm64
+        platforms: ${{ env.PLATFORMS }}
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.tags.outputs.tags }}
         # 添加构建标签
@@ -110,10 +139,9 @@ jobs:
           org.opencontainers.image.version=${{ steps.package-info.outputs.version || 'unknown' }}
           org.opencontainers.image.source=${{ github.event.repository.html_url }}
           org.opencontainers.image.revision=${{ github.sha }}
-          org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
-        outputs: type=image,name=target
+        provenance: false
     
     # 📊 构建摘要
     - name: Calculate build duration and summary
@@ -136,8 +164,8 @@ jobs:
         echo "| **Branch/Tag** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
         echo "| **Commit SHA** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
         echo "| **Build Duration** | **${minutes}m ${seconds}s** |" >> $GITHUB_STEP_SUMMARY
-        echo "| **Architectures** | \`linux/amd64\`, \`linux/arm64\` |" >> $GITHUB_STEP_SUMMARY
-        echo "| **Docker Repository** | \`${{ steps.tags.outputs.repository }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Architectures** | \`${{ env.PLATFORMS }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Container Repository** | \`${{ steps.tags.outputs.repository }}\` |" >> $GITHUB_STEP_SUMMARY
         
         if [ "${{ steps.package-info.outputs.has_package_json }}" = "true" ]; then
           echo "| **Package Name** | \`${{ steps.package-info.outputs.name }}\` |" >> $GITHUB_STEP_SUMMARY
@@ -148,7 +176,7 @@ jobs:
         
         if [ "${{ github.event_name }}" != "pull_request" ]; then
           echo "| **Action** | ✅ **Built and Pushed** |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Registry** | Docker Hub |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Registry** | GHCR |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 Generated Tags:" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
@@ -174,7 +202,7 @@ jobs:
         fi
     
     - name: Build performance check
-      if: steps.build-summary.outputs.build_duration > 600
+      if: ${{ fromJSON(steps.build-summary.outputs.build_duration) > 600 }}
       run: |
         echo "⚠️ Warning: Build took longer than 10 minutes (${{ steps.build-summary.outputs.formatted_duration }})"
         echo "Consider optimizing:"
@@ -184,13 +212,13 @@ jobs:
 
     - name: Build success notification
       run: |
-        echo "✅ Multi-architecture Docker image build completed successfully!"
+        echo "✅ Docker image build completed successfully!"
         echo "📊 Build Duration: ${{ steps.build-summary.outputs.formatted_duration }}"
-        echo "🏗️ Architectures: linux/amd64, linux/arm64"
-        echo "🐳 Docker Repository: ${{ steps.tags.outputs.repository }}"
-        
+        echo "🏗️ Architectures: ${{ env.PLATFORMS }}"
+        echo "🐳 Container Repository: ${{ steps.tags.outputs.repository }}"
+
         if [ "${{ github.event_name }}" != "pull_request" ]; then
-          echo "📤 Pushed to Docker Hub: ${{ steps.tags.outputs.repository }}"
+          echo "📤 Pushed to GHCR: ${{ steps.tags.outputs.repository }}"
           echo "🏷️ Tags pushed:"
           echo "  - latest (always updated)"
           if [ "${{ steps.package-info.outputs.has_package_json }}" = "true" ]; then
