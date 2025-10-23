@@ -35,7 +35,7 @@ class DreaminaTokenManager {
       logger.info(`页面标题: ${await page.title()}`, 'DREAMINA')
       
       logger.info('步骤1: 查找并点击 Create 菜单项...', 'DREAMINA')
-      await page.waitForTimeout(500)
+      await page.waitForTimeout(3000)
       
       // 先尝试点击 Create 菜单项
       const createSelectors = [
