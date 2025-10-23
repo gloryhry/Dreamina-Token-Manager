@@ -18,14 +18,15 @@ RUN cd public && npm run build
 # Stage 2: 运行环境（Playwright + Node）
 # 使用官方 Playwright 基镜像，内置 Chromium 及其依赖
 ########################################
-FROM mcr.microsoft.com/playwright:v1.49.1-jammy
+FROM mcr.microsoft.com/playwright:v1.56.1-jammy
 
 ENV NODE_ENV=production
 WORKDIR /app
 
 # 仅安装服务端运行依赖（排除 devDependencies）
 COPY package*.json ./
-RUN npm install --omit=dev
+# 使用 npm ci 保证与 package-lock.json 严格一致，避免 Playwright 版本漂移
+RUN npm ci --omit=dev
 
 # 拷贝服务端源码
 COPY src ./src
@@ -41,4 +42,3 @@ EXPOSE 3000
 
 # 启动服务
 CMD ["npm", "start"]
-

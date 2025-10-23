@@ -25,7 +25,7 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "ioredis": "^5.6.1",
-    "playwright": "^1.49.1",
+    "playwright": "1.56.1",
     "pm2": "^6.0.8"
   },
   "devDependencies": {
