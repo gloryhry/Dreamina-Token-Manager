@@ -15,7 +15,7 @@ class DreaminaTokenManager {
       logger.info(`开始登录 Dreamina 账户: ${email}`, 'DREAMINA')
       
       browser = await chromium.launch({
-        headless: false,
+        headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--incognito']
       })
       
