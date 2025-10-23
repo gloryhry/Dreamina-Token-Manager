@@ -15,7 +15,7 @@ class DreaminaTokenManager {
       logger.info(`开始登录 Dreamina 账户: ${email}`, 'DREAMINA')
       
       browser = await chromium.launch({
-        headless: true,
+        headless: false,
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--incognito']
       })
       
@@ -34,52 +34,88 @@ class DreaminaTokenManager {
       // logger.info(`页面截图已保存: ${screenshotPath}`, 'DREAMINA')
       logger.info(`页面标题: ${await page.title()}`, 'DREAMINA')
       
-      logger.info('步骤1: 查找并点击 Sign in 按钮...', 'DREAMINA')
+      logger.info('步骤1: 查找并点击 Create 菜单项...', 'DREAMINA')
       await page.waitForTimeout(500)
       
-      const selectors = [
-        // prefer explicit Sign in triggers only
-        'button:has-text("Sign in")',
-        'a:has-text("Sign in")',
-        'div[role="menuitem"]:has-text("Sign in")',
-        '#SiderMenuLogin',
-        '[class*="login"]',
-        'div:has-text("Sign in")',
-        'span:has-text("Sign in")'
+      // 先尝试点击 Create 菜单项
+      const createSelectors = [
+        'div[role="menuitem"]:has-text("Create")',
+        'div.lv-menu-item:has-text("Create")',
+        'div#AIGeneratedRecord:has-text("Create")'
       ]
       
-      let signInBtn = null
-      for (const selector of selectors) {
+      let createBtn = null
+      for (const selector of createSelectors) {
         try {
           const btn = page.locator(selector).first()
           const count = await btn.count()
-          logger.info(`尝试选择器: ${selector}, 找到 ${count} 个元素`, 'DREAMINA')
+          logger.info(`尝试 Create 选择器: ${selector}, 找到 ${count} 个元素`, 'DREAMINA')
           if (count > 0) {
             const isVisible = await btn.isVisible().catch(() => false)
-            logger.info(`选择器 ${selector} 可见性: ${isVisible}`, 'DREAMINA')
+            logger.info(`Create 选择器 ${selector} 可见性: ${isVisible}`, 'DREAMINA')
             if (isVisible) {
-              logger.info(`找到按钮，使用选择器: ${selector}`, 'DREAMINA')
-              signInBtn = btn
+              logger.info(`找到 Create 按钮，使用选择器: ${selector}`, 'DREAMINA')
+              createBtn = btn
               break
             }
           }
         } catch (e) {
-          logger.info(`选择器 ${selector} 出错: ${e.message}`, 'DREAMINA')
+          logger.info(`Create 选择器 ${selector} 出错: ${e.message}`, 'DREAMINA')
           continue
         }
       }
       
-      if (signInBtn) {
-        await signInBtn.click({ timeout: 10000 })
-        await this._delay(500)
+      if (createBtn) {
+        await createBtn.click({ timeout: 10000 })
+        await this._delay(1000)
+        logger.info('已点击 Create 菜单项，继续查找登录入口', 'DREAMINA')
       } else {
-        const buttons = await page.locator('button').allTextContents()
-        const links = await page.locator('a').allTextContents()
-        const divs = await page.locator('div[role="menuitem"]').allTextContents()
-        logger.info(`页面上的按钮: ${buttons.join(', ')}`, 'DREAMINA')
-        logger.info(`页面上的链接: ${links.join(', ')}`, 'DREAMINA')
-        logger.info(`页面上的菜单项: ${divs.join(', ')}`, 'DREAMINA')
-        throw new Error('无法找到 Sign in 按钮')
+        logger.info('没有找到 Create 菜单项，尝试点击 Sign in 按钮', 'DREAMINA')
+        
+        // 尝试点击 Sign in 按钮
+        const signInSelectors = [
+          'button:has-text("Sign in")',
+          'a:has-text("Sign in")',
+          'div[role="menuitem"]:has-text("Sign in")',
+          '#SiderMenuLogin',
+          '[class*="login"]',
+          'div:has-text("Sign in")',
+          'span:has-text("Sign in")'
+        ]
+        
+        let signInBtn = null
+        for (const selector of signInSelectors) {
+          try {
+            const btn = page.locator(selector).first()
+            const count = await btn.count()
+            logger.info(`尝试 Sign in 选择器: ${selector}, 找到 ${count} 个元素`, 'DREAMINA')
+            if (count > 0) {
+              const isVisible = await btn.isVisible().catch(() => false)
+              logger.info(`Sign in 选择器 ${selector} 可见性: ${isVisible}`, 'DREAMINA')
+              if (isVisible) {
+                logger.info(`找到 Sign in 按钮，使用选择器: ${selector}`, 'DREAMINA')
+                signInBtn = btn
+                break
+              }
+            }
+          } catch (e) {
+            logger.info(`Sign in 选择器 ${selector} 出错: ${e.message}`, 'DREAMINA')
+            continue
+          }
+        }
+        
+        if (signInBtn) {
+          await signInBtn.click({ timeout: 10000 })
+          await this._delay(500)
+        } else {
+          const buttons = await page.locator('button').allTextContents()
+          const links = await page.locator('a').allTextContents()
+          const divs = await page.locator('div[role="menuitem"]').allTextContents()
+          logger.info(`页面上的按钮: ${buttons.join(', ')}`, 'DREAMINA')
+          logger.info(`页面上的链接: ${links.join(', ')}`, 'DREAMINA')
+          logger.info(`页面上的菜单项: ${divs.join(', ')}`, 'DREAMINA')
+          throw new Error('无法找到 Create 菜单项或 Sign in 按钮')
+        }
       }
       
       logger.info('步骤2: 点击 Continue with email...', 'DREAMINA')
@@ -104,6 +140,7 @@ class DreaminaTokenManager {
       }
       
       if (!continueEmail) {
+        // await this._delay(500000)
         throw new Error('无法找到 Continue with email 按钮')
       }
       
