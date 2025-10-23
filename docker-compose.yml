@@ -1,41 +1,31 @@
 services:
-  qwen2api:
-    container_name: qwen2api
-    image: rfym21/qwen2api:latest
+  dreamina:
+    image: ghcr.io/gloryhry/dreamina-token-manager:latest
+    container_name: dreamina-token-manager
     restart: always
+    # Playwright/Chromium 在 Docker 中更稳定的共享内存配置
+    shm_size: "1gb"
     ports:
-      - "3000:3000"
+      - "3000:3000"  # 主机:容器
+    # 优先从 .env 读取环境变量，便于统一管理机密与配置
+    env_file:
+      - .env
+    environment:
+      # 如需修改对外端口，请同时调整上面的 ports 中主机端口
+      SERVICE_PORT: "3000"
+      # 其余配置（API_KEY、DATA_SAVE_MODE、REDIS_URL、LOG_LEVEL、ENABLE_FILE_LOG 等）
+      # 推荐放入 .env 管理，这里无需重复定义
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
-    environment:
-      # 如果需要修改Docker暴露端口，请修改ports中的参数
-      # 示例(8080:3000) 则访问 http://localhost:8080
-      - SERVICE_PORT=3000
-      # API 密钥 (非必填)
-      # 如果需要使用多账户或使用内置账户，请填写
-      - API_KEY=sk-123456
-      # 监听地址(非必填)
-      - LISTEN_ADDRESS=
-      # PM2 多进程配置
-      # PM2进程数量: max(使用所有CPU核心), 数字(指定进程数量), 1(单进程)
-      # 注意: PM2集群模式下所有进程共用同一个端口
-      - PM2_INSTANCES=1
-      # PM2内存限制，超过此限制将自动重启进程
-      - PM2_MAX_MEMORY=1G
-      # 搜索信息展示模式
-      # table: 使用折叠块和表格展示
-      # text: 使用纯文本
-      - SEARCH_INFO_MODE=table
-      # 是否输出思考过程
-      - OUTPUT_THINK=true
-      # 简化模型映射 (true: 只返回基础模型, false: 返回完整模型列表)
-      - SIMPLE_MODEL_MAP=false
-      # redis 连接地址(如果使用redis模式，则必填，当redis使用tls时将redis://替换为rediss://)
-      - REDIS_URL=
-      # 数据保存模式
-      - DATA_SAVE_MODE=none
-      # 账号(如果使用redis和file模式，则不需要填写)
-      - ACCOUNTS=
-      # 图片缓存
-      - CACHE_MODE=default
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:'+(process.env.SERVICE_PORT||3000), r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+# 使用说明：
+# 1) 将 .env.example 复制为 .env 并按需修改变量（尤其是 API_KEY）。
+# 2) 如需启用 Redis 模式：在 .env 设置 DATA_SAVE_MODE=redis 与 REDIS_URL=redis://<host>:6379。
+# 3) 启动：docker compose -f docker-compose.yaml up -d
