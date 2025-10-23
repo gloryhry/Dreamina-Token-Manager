@@ -7,7 +7,8 @@ WORKDIR /app
 
 # 仅拷贝前端依赖清单并安装依赖（利用缓存）
 COPY public/package*.json ./public/
-RUN cd public && npm install
+# 优先使用 lockfile 复现依赖；若无 lockfile 则回退 npm install
+RUN cd public && (npm ci || npm install)
 
 # 拷贝前端源码并构建
 COPY public ./public
@@ -25,8 +26,9 @@ WORKDIR /app
 
 # 仅安装服务端运行依赖（排除 devDependencies）
 COPY package*.json ./
-# 使用 npm ci 保证与 package-lock.json 严格一致，避免 Playwright 版本漂移
-RUN npm ci --omit=dev
+# 使用 npm ci 保证与 package-lock.json 严格一致；
+# 兼容旧版 npm（不支持 --omit），以及缺失 lockfile 的情况（回退 npm install）。
+RUN npm ci --omit=dev || npm ci --only=production || npm install --omit=dev
 
 # 拷贝服务端源码
 COPY src ./src

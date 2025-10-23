@@ -86,16 +86,13 @@ babel.config.*
 webpack.config.*
 tsconfig.json
 
-node_modules/
-npm-debug.log
+# 其他杂项
 .npm
 .node_repl_history
 .yarn-integrity
-yarn.lock
-package-lock.json
+
+# 锁文件需包含到构建上下文，确保 npm ci 可用且版本可复现
+# 如需排除，请仅在 CI 环境中改用 npm install 并接受版本漂移
+# 保留锁文件：package-lock.json 与 public/package-lock.json
 
 data/
-docs/
-.gitignore
-.github/
-
