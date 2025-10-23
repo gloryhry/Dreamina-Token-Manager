@@ -46,6 +46,13 @@
                   class="action-button font-bold border border-yellow-200 bg-yellow-50 text-yellow-900 px-4 py-2 rounded-xl shadow-sm hover:bg-yellow-100 hover:border-yellow-400 transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0">
             导出账号
           </button>
+          <div class="flex items-center space-x-2 w-full sm:w-auto">
+            <input v-model="proxyTarget" placeholder="透传目标，例如 https://jimeng.985100.xyz" class="flex-1 sm:w-72 rounded-xl border border-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            <button @click="saveProxyTarget"
+                    class="action-button font-bold border border-blue-200 bg-blue-50 text-blue-900 px-3 py-2 rounded-xl shadow-sm hover:bg-blue-100 hover:border-blue-400 transition-all duration-300">
+              保存目标
+            </button>
+          </div>
         </div>
       </div>
 
@@ -337,6 +344,8 @@ const showDeleteAllConfirm = ref(false)
 const isRefreshingAll = ref(false)
 const isForceRefreshingAll = ref(false)
 const refreshingTokens = ref([])
+// 透传目标
+const proxyTarget = ref('')
 
 // Toast 通知
 const toast = ref({
@@ -653,7 +662,28 @@ const exportAccounts = () => {
   showToast('导出完成')
 }
 
+const saveProxyTarget = async () => {
+  try {
+    await axios.post('/api/proxy/target', { target: proxyTarget.value }, {
+      headers: { 'Authorization': localStorage.getItem('apiKey') || '' }
+    })
+    showToast('目标已保存')
+  } catch (error) {
+    console.error('保存透传目标失败:', error)
+    showToast('保存透传目标失败: ' + (error?.message || ''), 'error')
+  }
+}
+
 onMounted(() => {
+  // 加载透传目标
+  ;(async () => {
+    try {
+      const res = await axios.get('/api/proxy/target', {
+        headers: { 'Authorization': localStorage.getItem('apiKey') || '' }
+      })
+      proxyTarget.value = res.data?.target || ''
+    } catch (_) {}
+  })()
   getTokens()
   try {
     const key = localStorage.getItem('apiKey') || ''

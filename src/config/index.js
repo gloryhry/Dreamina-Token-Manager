@@ -24,6 +24,8 @@ const config = {
     dataSaveMode: process.env.DATA_SAVE_MODE || "none",
     apiKeys: apiKeys,
     adminKey: adminKey,
+    proxyTarget: process.env.PROXY_TARGET || '',
+    proxyTimeoutMs: parseInt(process.env.PROXY_TIMEOUT_MS, 10) || 600000,
     simpleModelMap: process.env.SIMPLE_MODEL_MAP === 'true' ? true : false,
     listenAddress: process.env.LISTEN_ADDRESS || null,
     listenPort: process.env.SERVICE_PORT || 3000,
@@ -38,6 +40,8 @@ const config = {
     logDir: process.env.LOG_DIR || "./logs",
     maxLogFileSize: parseInt(process.env.MAX_LOG_FILE_SIZE) || 10,
     maxLogFiles: parseInt(process.env.MAX_LOG_FILES) || 5,
+    proxyLogBody: process.env.PROXY_LOG_BODY === 'true',
+    proxyLogBodyMax: parseInt(process.env.PROXY_LOG_BODY_MAX, 10) || 2048,
 }
 
 module.exports = config

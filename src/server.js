@@ -8,6 +8,7 @@ const path = require('path')
 const fs = require('fs')
 const verifyRouter = require('./routes/verify.js')
 const dreaminaAccountsRouter = require('./routes/dreamina-accounts.js')
+const proxyRouter = require('./routes/proxy.js')
 const { addClient: addSseClient } = require('./utils/sse')
 const { validateApiKey } = require('./middlewares/authorization')
 
@@ -45,6 +46,9 @@ app.get('/api/events', (req, res) => {
     res.status(500).end()
   }
 })
+
+// 通用 API 透传（放在本地 API 之后，避免覆盖内部路由）
+app.use('/api', proxyRouter)
 
 app.use(express.static(path.join(__dirname, '../public/dist')))
 
