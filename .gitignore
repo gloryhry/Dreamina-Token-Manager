@@ -12,3 +12,4 @@ pkg_dist/
 /public/dist
 .spec-workflow
 *.md
+!README.md
