@@ -42,6 +42,9 @@ const config = {
     maxLogFiles: parseInt(process.env.MAX_LOG_FILES) || 5,
     proxyLogBody: process.env.PROXY_LOG_BODY === 'true',
     proxyLogBodyMax: parseInt(process.env.PROXY_LOG_BODY_MAX, 10) || 2048,
+    // 时区与每日刷新配置
+    timeZone: process.env.TIMEZONE || 'UTC',
+    dailySessionUpdateTime: (process.env.DAILY_SESSION_UPDATE_TIME || '').trim(), // HH:mm，留空关闭
 }
 
 module.exports = config

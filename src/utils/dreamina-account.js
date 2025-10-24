@@ -10,6 +10,8 @@ class DreaminaAccount {
         
         this.dreaminaAccounts = []
         this.isInitialized = false
+        this._dailyTimer = null
+        this._lastDailyRunDate = null
         
         this._initialize()
     }
@@ -25,10 +27,98 @@ class DreaminaAccount {
                 )
             }
             
+            // 设置每日定时刷新（按指定时区与时间）
+            this._setupDailyRefresh()
+
             this.isInitialized = true
             logger.success(`Dreamina 账户管理器初始化完成，共加载 ${this.dreaminaAccounts.length} 个账户`, 'DREAMINA')
         } catch (error) {
             logger.error('Dreamina 账户管理器初始化失败', 'DREAMINA', '', error)
+        }
+    }
+
+    _setupDailyRefresh() {
+        try {
+            const timeStr = config.dailySessionUpdateTime
+            if (!timeStr) {
+                logger.info('未配置 DAILY_SESSION_UPDATE_TIME，跳过每日刷新调度', 'SCHEDULE')
+                return
+            }
+
+            const [hStr, mStr] = timeStr.split(':')
+            const hour = Number(hStr)
+            const minute = Number(mStr)
+            if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+                logger.warn(`无效的 DAILY_SESSION_UPDATE_TIME: ${timeStr}，期望 HH:mm（24小时制）`, 'SCHEDULE')
+                return
+            }
+
+            // 清理旧定时器
+            if (this._dailyTimer) clearInterval(this._dailyTimer)
+
+            // 每分钟检查一次目标时区时间
+            this._dailyTimer = setInterval(() => this._checkDailyRefresh(hour, minute), 60 * 1000)
+            logger.info(`已启用每日刷新调度：${timeStr} @ ${config.timeZone || 'UTC'}`, 'SCHEDULE', '⏰')
+        } catch (e) {
+            logger.error('每日刷新调度初始化失败', 'SCHEDULE', '', e)
+        }
+    }
+
+    _getNowInTimezoneParts() {
+        const tz = config.timeZone || 'UTC'
+        try {
+            const fmt = new Intl.DateTimeFormat('en-CA', {
+                timeZone: tz,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            })
+            const parts = fmt.formatToParts(new Date())
+            const map = {}
+            for (const p of parts) map[p.type] = p.value
+            return {
+                year: map.year,
+                month: map.month,
+                day: map.day,
+                hour: map.hour,
+                minute: map.minute,
+                dateStr: `${map.year}-${map.month}-${map.day}`
+            }
+        } catch (e) {
+            // 回退到本地时间
+            const now = new Date()
+            const y = String(now.getFullYear())
+            const mo = String(now.getMonth() + 1).padStart(2, '0')
+            const d = String(now.getDate()).padStart(2, '0')
+            const h = String(now.getHours()).padStart(2, '0')
+            const mi = String(now.getMinutes()).padStart(2, '0')
+            logger.warn(`无效的 TIMEZONE: ${config.timeZone}，已回退为本地时区`, 'SCHEDULE')
+            return { year: y, month: mo, day: d, hour: h, minute: mi, dateStr: `${y}-${mo}-${d}` }
+        }
+    }
+
+    async _checkDailyRefresh(targetHour, targetMinute) {
+        try {
+            if (!this.isInitialized) return
+            const now = this._getNowInTimezoneParts()
+            if (Number(now.hour) === targetHour && Number(now.minute) === targetMinute) {
+                if (this._lastDailyRunDate === now.dateStr) return
+
+                this._lastDailyRunDate = now.dateStr
+                logger.info(`触发每日 SessionID 批量刷新（全部账户）`, 'SCHEDULE', '🔁', { date: now.dateStr, time: `${now.hour}:${now.minute}`, tz: config.timeZone })
+                // 刷新全部账户（用超大阈值确保覆盖）
+                try {
+                    const count = await this.autoRefreshSessionIds(8760)
+                    logger.success(`每日批量刷新完成，成功数量：${count}`, 'SCHEDULE')
+                } catch (err) {
+                    logger.error('每日批量刷新执行失败', 'SCHEDULE', '', err)
+                }
+            }
+        } catch (e) {
+            logger.error('每日刷新检查异常', 'SCHEDULE', '', e)
         }
     }
 
@@ -227,6 +317,10 @@ class DreaminaAccount {
         if (this.refreshInterval) {
             clearInterval(this.refreshInterval)
             this.refreshInterval = null
+        }
+        if (this._dailyTimer) {
+            clearInterval(this._dailyTimer)
+            this._dailyTimer = null
         }
         
         logger.info('Dreamina 账户管理器已清理资源', 'DREAMINA', '🧹')
