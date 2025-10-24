@@ -1,5 +1,6 @@
 const { chromium } = require('playwright')
 const { logger } = require('./logger')
+const config = require('../config')
 
 class DreaminaTokenManager {
   constructor() {
@@ -14,10 +15,26 @@ class DreaminaTokenManager {
     try {
       logger.info(`开始登录 Dreamina 账户: ${email}`, 'DREAMINA')
       
-      browser = await chromium.launch({
+      const launchOptions = {
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--incognito']
-      })
+      }
+
+      // 代理支持（http/https/socks5）
+      if (config.browserProxyEnable && config.browserProxyUrl) {
+        try {
+          launchOptions.proxy = {
+            server: config.browserProxyUrl,
+            username: config.browserProxyUsername || undefined,
+            password: config.browserProxyPassword || undefined
+          }
+          logger.info(`启用浏览器代理：${config.browserProxyUrl}`, 'DREAMINA')
+        } catch (e) {
+          logger.warn(`代理配置无效，忽略。原因: ${e.message}`, 'DREAMINA')
+        }
+      }
+
+      browser = await chromium.launch(launchOptions)
       
       context = await browser.newContext({
         viewport: { width: 1280, height: 720 },
@@ -242,7 +259,7 @@ class DreaminaTokenManager {
         }
         await page.waitForLoadState('networkidle', { timeout: 10000 })
       }
-      await this._delay(10000)
+      await this._delay(15000)
       
       // const finalScreenshot = 'screenshot-disabled'
       // screenshot disabled: removed page.screenshot

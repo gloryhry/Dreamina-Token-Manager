@@ -45,6 +45,11 @@ const config = {
     // 时区与每日刷新配置
     timeZone: process.env.TIMEZONE || 'UTC',
     dailySessionUpdateTime: (process.env.DAILY_SESSION_UPDATE_TIME || '').trim(), // HH:mm，留空关闭
+    // Playwright 浏览器登录代理配置
+    browserProxyEnable: process.env.BROWSER_PROXY_ENABLE === 'true',
+    browserProxyUrl: (process.env.BROWSER_PROXY_URL || '').trim(),
+    browserProxyUsername: (process.env.BROWSER_PROXY_USERNAME || '').trim(),
+    browserProxyPassword: (process.env.BROWSER_PROXY_PASSWORD || '').trim(),
 }
 
 module.exports = config
