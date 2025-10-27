@@ -11,6 +11,7 @@ class DreaminaTokenManager {
   async login(email, password) {
     let browser = null
     let context = null
+    let page = null
     
     try {
       logger.info(`开始登录 Dreamina 账户: ${email}`, 'DREAMINA')
@@ -41,7 +42,7 @@ class DreaminaTokenManager {
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       })
       
-      const page = await context.newPage()
+      page = await context.newPage()
       
       await page.goto(this.loginUrl, { waitUntil: 'networkidle', timeout: 60000 })
       await this._delay(500)
@@ -292,8 +293,18 @@ class DreaminaTokenManager {
       logger.error(`${email} 登录失败`, 'DREAMINA', '', error)
       return null
     } finally {
-      if (context) await context.close()
-      if (browser) await browser.close()
+      try {
+        if (page) await page.close().catch(() => {})
+      } catch (_) {}
+      try {
+        if (context) await context.close().catch(() => {})
+      } catch (_) {}
+      try {
+        if (browser) await browser.close().catch(() => {})
+      } catch (_) {}
+      page = null
+      context = null
+      browser = null
     }
   }
 
