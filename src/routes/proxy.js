@@ -103,6 +103,52 @@ router.all('*', apiKeyVerify, async (req, res) => {
       validateStatus: () => true
     }
 
+    // 按内容类型与方法修正透传体与请求头，避免参数丢失
+    try {
+      const methodUpper = (req.method || 'GET').toUpperCase()
+      const ct = String(headers['content-type'] || headers['Content-Type'] || '').toLowerCase()
+      const isGetLike = ['GET', 'HEAD'].includes(methodUpper)
+      const isJson = ct.includes('application/json')
+      const isFormUrl = ct.includes('application/x-www-form-urlencoded')
+      const isMultipart = ct.includes('multipart/form-data')
+      const isOctet = ct.includes('application/octet-stream')
+      const isText = ct.startsWith('text/') || ct.includes('text/plain')
+
+      if (isGetLike) {
+        delete headers['content-length']
+        delete headers['Content-Length']
+        axiosConfig.data = undefined
+      } else if (isFormUrl) {
+        const form = new URLSearchParams()
+        const body = req.body || {}
+        Object.keys(body).forEach(k => {
+          const v = body[k]
+          if (Array.isArray(v)) v.forEach(item => form.append(k, item))
+          else if (v !== undefined && v !== null) form.append(k, String(v))
+        })
+        axiosConfig.data = form.toString()
+        delete headers['content-length']
+        delete headers['Content-Length']
+        if (!headers['content-type'] && !headers['Content-Type']) headers['content-type'] = 'application/x-www-form-urlencoded'
+      } else if (isJson) {
+        axiosConfig.data = req.body
+        delete headers['content-length']
+        delete headers['Content-Length']
+        if (!headers['content-type'] && !headers['Content-Type']) headers['content-type'] = 'application/json'
+      } else if (isMultipart || isOctet || isText || !ct) {
+        // 对未解析/二进制/文本/未知类型：直接转发原始流
+        axiosConfig.data = req
+        // 保持 content-type（含 boundary）原值；content-length 若缺失则走 chunked
+      } else {
+        // 其他类型保守处理为原始流
+        axiosConfig.data = req
+      }
+
+      axiosConfig.headers = headers
+      axiosConfig.maxBodyLength = Infinity
+      axiosConfig.maxContentLength = Infinity
+    } catch (_) {}
+
     // 透传请求日志（脱敏）
     const _safeHeaders = { ...(headers || {}) }
     if (_safeHeaders.authorization) _safeHeaders.authorization = 'Bearer ****'
