@@ -66,13 +66,6 @@ router.all('*', apiKeyVerify, async (req, res) => {
       return res.status(404).json({ error: 'not found' })
     }
 
-    const account = pickAccount()
-    if (!account || !account.sessionid) {
-      return res.status(503).json({ error: 'no available account' })
-    }
-
-    const sessionId = account.sessionid.startsWith('us-') ? account.sessionid : `us-${account.sessionid}`
-
     // 构建目标 URL: 去除 /api 前缀
     const originalPath = req.originalUrl || req.url || ''
     const pathWithoutApi = originalPath.replace(/^\/api/, '')
@@ -86,9 +79,9 @@ router.all('*', apiKeyVerify, async (req, res) => {
       const H = h.charAt(0).toUpperCase() + h.slice(1)
       if (incomingHeaders[H]) delete incomingHeaders[H]
     })
+    // 注意：authorization 在重试时动态写入（切换 sessionId）
     const headers = {
-      ...incomingHeaders,
-      authorization: `Bearer ${sessionId}`
+      ...incomingHeaders
     }
 
     const axiosConfig = {
@@ -148,6 +141,119 @@ router.all('*', apiKeyVerify, async (req, res) => {
       axiosConfig.maxBodyLength = Infinity
       axiosConfig.maxContentLength = Infinity
     } catch (_) {}
+
+    // 基于状态码的 sessionId 轮换重试
+    // 触发条件：上游响应为 429/400/401/504
+    // 注意：当请求体为流（如 multipart/octet），无法安全重试
+    {
+      const retryStatuses = new Set([400, 401, 429, 504])
+      const maxRetries = Number.isFinite(config.proxyMaxRetry) ? config.proxyMaxRetry : 5
+      const canRetryBody = axiosConfig.data !== req
+
+      let attempt = 0
+      let finalResp = null
+      let lastStatusForLog = null
+
+      while (true) {
+        const accountForAttempt = pickAccount()
+        if (!accountForAttempt || !accountForAttempt.sessionid) {
+          setCorsHeaders(req, res)
+          return res.status(503).json({ error: 'no available account' })
+        }
+        const sid = accountForAttempt.sessionid.startsWith('us-') ? accountForAttempt.sessionid : `us-${accountForAttempt.sessionid}`
+        headers.authorization = `Bearer ${sid}`
+
+        // 透传请求日志（脱敏）
+        const _safeHeaders2 = { ...(headers || {}) }
+        if (_safeHeaders2.authorization) _safeHeaders2.authorization = 'Bearer ****'
+        if (_safeHeaders2.Authorization) _safeHeaders2.Authorization = 'Bearer ****'
+        if (_safeHeaders2.cookie) _safeHeaders2.cookie = '****'
+        if (_safeHeaders2.Cookie) _safeHeaders2.Cookie = '****'
+        const _bodySize2 = (() => {
+          try {
+            if (!axiosConfig.data) return 0
+            if (typeof axiosConfig.data === 'string') return Buffer.byteLength(axiosConfig.data)
+            return Buffer.byteLength(JSON.stringify(axiosConfig.data))
+          } catch (_) { return -1 }
+        })()
+        const _reqBodySnippet2 = (() => {
+          if (!config.proxyLogBody) return undefined
+          try {
+            if (!axiosConfig.data) return ''
+            if (Buffer.isBuffer(axiosConfig.data)) return '[buffer omitted]'
+            const raw = typeof axiosConfig.data === 'string' ? axiosConfig.data : JSON.stringify(axiosConfig.data)
+            const max = Number.isFinite(config.proxyLogBodyMax) ? config.proxyLogBodyMax : 2048
+            return raw.length > max ? `${raw.slice(0, max)}...(${raw.length}B)` : raw
+          } catch (_) { return '[unserializable]' }
+        })()
+        logger.network(`REQ[${attempt}] ${req.method} -> ${targetUrl}`, 'PROXY', {
+          headers: _safeHeaders2,
+          bodySize: _bodySize2,
+          bodySnippet: _reqBodySnippet2
+        })
+
+        const _start = Date.now()
+        const resp = await axios(axiosConfig)
+        lastStatusForLog = resp.status
+
+        // 响应日志摘要
+        const _durationMs = Date.now() - _start
+        const _contentType = (resp.headers && (resp.headers['content-type'] || resp.headers['Content-Type'])) || ''
+        const _respSize = (() => {
+          try {
+            if (resp.headers && (resp.headers['content-length'] || resp.headers['Content-Length'])) {
+              return parseInt(resp.headers['content-length'] || resp.headers['Content-Length'], 10)
+            }
+            const d = resp.data
+            if (!d) return 0
+            if (Buffer.isBuffer(d)) return d.length
+            if (typeof d === 'string') return Buffer.byteLength(d)
+            return Buffer.byteLength(JSON.stringify(d))
+          } catch (_) { return -1 }
+        })()
+        const _respSnippet = (() => {
+          if (!config.proxyLogBody) return undefined
+          try {
+            const ct = String(_contentType || '').toLowerCase()
+            if (!ct.includes('json') && !ct.startsWith('text/')) return '[non-text content omitted]'
+            const d = resp.data
+            if (Buffer.isBuffer(d)) return '[buffer omitted]'
+            const raw = typeof d === 'string' ? d : JSON.stringify(d)
+            const max = Number.isFinite(config.proxyLogBodyMax) ? config.proxyLogBodyMax : 2048
+            return raw.length > max ? `${raw.slice(0, max)}...(${raw.length}B)` : raw
+          } catch (_) { return '[unserializable]' }
+        })()
+        logger.network(`RES[${attempt}] ${resp.status} <- ${targetUrl} ${_durationMs}ms`, 'PROXY', {
+          contentType: _contentType,
+          respSize: _respSize,
+          bodySnippet: _respSnippet
+        })
+
+        if (retryStatuses.has(resp.status) && attempt < maxRetries && canRetryBody) {
+          attempt += 1
+          logger.warn(`上游状态 ${resp.status}，切换 sessionId 重试（第 ${attempt}/${maxRetries} 次）`, 'PROXY')
+          continue
+        }
+
+        finalResp = resp
+        break
+      }
+
+      // 透传最终响应
+      Object.entries((finalResp && finalResp.headers) || {}).forEach(([k, v]) => {
+        const _skip = ['connection', 'keep-alive', 'transfer-encoding', 'upgrade']
+        if (!_skip.includes(String(k || '').toLowerCase())) {
+          try { res.setHeader(k, v) } catch (_) {}
+        }
+      })
+      setCorsHeaders(req, res)
+
+      if (!finalResp) {
+        return res.status(502).json({ error: 'bad gateway', detail: `no response, last status: ${lastStatusForLog || 'unknown'}` })
+      }
+
+      return res.status(finalResp.status).send(finalResp.data)
+    }
 
     // 透传请求日志（脱敏）
     const _safeHeaders = { ...(headers || {}) }

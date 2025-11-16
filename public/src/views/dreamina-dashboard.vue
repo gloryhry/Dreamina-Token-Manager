@@ -619,7 +619,7 @@ const deleteToken = async (email) => {
   if (!confirm('确定要删除此账号吗？')) return
 
   try {
-    await axios.delete('/api/deleteAccount', {
+    await axios.delete('/api/dreamina/deleteAccount', {
       data: { email },
       headers: {
         'Authorization': localStorage.getItem('apiKey') || ''

@@ -26,6 +26,8 @@ const config = {
     adminKey: adminKey,
     proxyTarget: process.env.PROXY_TARGET || '',
     proxyTimeoutMs: parseInt(process.env.PROXY_TIMEOUT_MS, 10) || 600000,
+    // 当 /api/* 返回 429/400/401/504 时的最大重试次数（切换 sessionId）
+    proxyMaxRetry: parseInt(process.env.PROXY_MAX_RETRY, 10) || 5,
     simpleModelMap: process.env.SIMPLE_MODEL_MAP === 'true' ? true : false,
     listenAddress: process.env.LISTEN_ADDRESS || null,
     listenPort: process.env.SERVICE_PORT || 3000,
